@@ -29,15 +29,21 @@ interface ChartData {
 }
 
 export default function Home() {
-  const { data, isConnected, error } = useSSE();
+  const { data, isConnected, error: connectionError } = useSSE();
   const [prices, setPrices] = useState<CryptoPrice[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [chartData, setChartData] = useState<{ [key: string]: ChartData[] }>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
   const [lastSuccessfulData, setLastSuccessfulData] = useState<{
     prices: CryptoPrice[];
     news: NewsItem[];
   } | null>(null);
+
+  // Handle client-side mounting
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Initial data fetch
   useEffect(() => {
@@ -63,8 +69,10 @@ export default function Home() {
       }
     };
 
-    initializeData();
-  }, []);
+    if (isMounted) {
+      initializeData();
+    }
+  }, [isMounted, lastSuccessfulData]);
 
   // Update data when SSE sends new information
   useEffect(() => {

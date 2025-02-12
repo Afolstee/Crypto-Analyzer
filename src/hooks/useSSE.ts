@@ -1,21 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 
-interface UseSSEReturn {
-  data: any;
-  isConnected: boolean;
-  error: string | null;
+interface SSEData {
+  prices: {
+    id: string;
+    symbol: string;
+    current_price: number;
+    price_change_percentage_24h: number;
+    total_volume: number;
+  }[];
+  news: {
+    title: string;
+    url: string;
+    published_at: string;
+    currencies: { code: string }[];
+  }[];
 }
 
-export const useSSE = (): UseSSEReturn => {
-  const [data, setData] = useState<any>(null);
+export function useSSE() {
+  const [data, setData] = useState<SSEData | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     const eventSource = new EventSource('http://localhost:5000/crypto-stream');
 
     eventSource.onopen = () => {
-      console.log('SSE connection opened');
       setIsConnected(true);
       setError(null);
     };
@@ -23,21 +32,15 @@ export const useSSE = (): UseSSEReturn => {
     eventSource.onmessage = (event) => {
       try {
         const parsedData = JSON.parse(event.data);
-        if (parsedData.error) {
-          setError(parsedData.error);
-        } else {
-          setData(parsedData);
-          setError(null);
-        }
-      } catch (e) {
-        setError('Failed to parse data');
+        setData(parsedData);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to parse SSE data'));
       }
     };
 
-    eventSource.onerror = (event) => {
-      console.error('SSE connection error:', event);
+    eventSource.onerror = () => {
       setIsConnected(false);
-      setError('Connection error. Attempting to reconnect...');
+      setError(new Error('SSE connection failed'));
     };
 
     return () => {
@@ -47,4 +50,4 @@ export const useSSE = (): UseSSEReturn => {
   }, []);
 
   return { data, isConnected, error };
-};
+}
