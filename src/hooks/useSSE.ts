@@ -18,6 +18,8 @@ interface SSEData {
 }
 
 export function useSSE() {
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [data, setData] = useState<SSEData | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -36,6 +38,8 @@ export function useSSE() {
       try {
         const parsedData = JSON.parse(event.data);
         setData(parsedData);
+        setLastUpdateTime(new Date());
+        if (isInitialLoading) setIsInitialLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to parse SSE data'));
       }
@@ -50,7 +54,7 @@ export function useSSE() {
       eventSource.close();
       setIsConnected(false);
     };
-  }, []);
+  }, [isInitialLoading]); // Added isInitialLoading to dependencies array
 
-  return { data, isConnected, error };
+  return { data, isConnected, error, isInitialLoading, lastUpdateTime };
 }
