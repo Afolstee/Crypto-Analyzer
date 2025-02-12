@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_CONFIG } from '@/config/api';
 
 interface SSEData {
   prices: {
@@ -22,7 +23,9 @@ export function useSSE() {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const eventSource = new EventSource('http://localhost:5000/crypto-stream');
+    const eventSource = new EventSource(
+      `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.stream}`
+    );
 
     eventSource.onopen = () => {
       setIsConnected(true);

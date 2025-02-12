@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { API_CONFIG } from '@/config/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';  // Import from local alert component
 
 interface CryptoPrice {
@@ -29,28 +30,24 @@ interface ChartData {
 }
 
 export default function Home() {
-  const { data, isConnected, error: connectionError } = useSSE();
+  const { data, isConnected, error } = useSSE();
   const [prices, setPrices] = useState<CryptoPrice[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [chartData, setChartData] = useState<{ [key: string]: ChartData[] }>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isMounted, setIsMounted] = useState(false);
   const [lastSuccessfulData, setLastSuccessfulData] = useState<{
     prices: CryptoPrice[];
     news: NewsItem[];
   } | null>(null);
-
-  // Handle client-side mounting
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   // Initial data fetch
   useEffect(() => {
     const initializeData = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('http://localhost:5000/crypto-data');
+        const response = await fetch(
+          `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.data}`
+        );
         if (!response.ok) {
           throw new Error('Failed to fetch initial data');
         }
@@ -69,10 +66,8 @@ export default function Home() {
       }
     };
 
-    if (isMounted) {
-      initializeData();
-    }
-  }, [isMounted, lastSuccessfulData]);
+    initializeData();
+  }, []);
 
   // Update data when SSE sends new information
   useEffect(() => {
