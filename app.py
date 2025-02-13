@@ -4,6 +4,7 @@ import requests
 import json
 import time
 from threading import Thread
+from crypto_analyzer import CryptoDataManager
 
 app = Flask(__name__)
 CORS(app)
@@ -13,6 +14,9 @@ CRYPTOPANIC_URL = "https://cryptopanic.com/api/v1/posts/"
 API_KEY = "716e8f410469cf6d77baaa48dd00821822e4ab97"
 
 coin_ids = ["bitcoin", "ethereum", "solana", "cardano", "dogecoin", "ripple", "polkadot", "litecoin", "chainlink", "uniswap"]
+
+# Initialize the analyzer
+analyzer = CryptoDataManager(coin_ids=coin_ids)
 
 def fetch_price_data():
     params = {"vs_currency": "usd", "ids": ",".join(coin_ids)}
@@ -34,11 +38,60 @@ def fetch_news():
         print(f"❌ Failed to fetch news data. Status code: {response.status_code}")
         return []
 
+def create_analysis_response(prices, news, analyzer):
+    """Create response with price, news, and analysis data"""
+    response = {
+        'prices': prices,
+        'news': news,
+        'analysis': {},
+        'model_ready': analyzer.is_scaler_fitted
+    }
+    
+    if analyzer.is_scaler_fitted:
+        # Add analysis for each coin
+        for price in prices:
+            analysis = analyzer.predict_movement(price['id'])
+            if analysis:
+                response['analysis'][price['id']] = analysis
+    
+    return response
+
+def initialize_analyzer():
+    """Initialize the analyzer with any available data"""
+    while not analyzer.is_scaler_fitted:
+        try:
+            print("Attempting to initialize analyzer...")
+            prices = fetch_price_data()
+            news = fetch_news()
+            
+            if prices:
+                analyzer.store_price_data(prices)
+            if news:
+                analyzer.store_news_data(news)
+            
+            # Try to fit with whatever data we have
+            analyzer.fit_scaler()
+            analyzer.fit_model()
+            print("✅ Initial model training complete")
+            break
+        except Exception as e:
+            print(f"⚠️ Initial training incomplete (will retry in 5 seconds): {e}")
+            time.sleep(5)
+
 @app.route("/crypto-data", methods=["GET"])
 def get_crypto_data():
     prices = fetch_price_data()
     news = fetch_news()
-    return jsonify({"prices": prices, "news": news})
+    
+    # Store data for analysis
+    if prices:
+        analyzer.store_price_data(prices)
+    if news:
+        analyzer.store_news_data(news)
+    
+    # Generate response with analysis
+    response = create_analysis_response(prices, news, analyzer)
+    return jsonify(response)
 
 @app.route("/crypto-stream")
 def crypto_stream():
@@ -47,8 +100,26 @@ def crypto_stream():
             try:
                 prices = fetch_price_data()
                 news = fetch_news()
-                data = json.dumps({"prices": prices, "news": news})
-                yield f"data: {data}\n\n"
+                
+                # Store and analyze data
+                if prices:
+                    analyzer.store_price_data(prices)
+                if news:
+                    analyzer.store_news_data(news)
+                
+                # If model isn't fitted yet, try to fit it
+                if not analyzer.is_scaler_fitted:
+                    try:
+                        analyzer.fit_scaler()
+                        analyzer.fit_model()
+                        print("✅ Model training complete during stream")
+                    except Exception as e:
+                        print(f"⚠️ Model training incomplete: {e}")
+                
+                # Generate response with analysis
+                response = create_analysis_response(prices, news, analyzer)
+                yield f"data: {json.dumps(response)}\n\n"
+                
                 time.sleep(5)
             except Exception as e:
                 print(f"Error in stream: {e}")
@@ -66,4 +137,10 @@ def crypto_stream():
     )
 
 if __name__ == "__main__":
+    print("Initializing analyzer...")
+    # Start analyzer initialization in a separate thread
+    init_thread = Thread(target=initialize_analyzer)
+    init_thread.start()
+    
+    # Start the Flask app
     app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)

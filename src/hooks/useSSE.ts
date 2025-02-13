@@ -15,8 +15,20 @@ interface SSEData {
     published_at: string;
     currencies: { code: string }[];
   }[];
+  analysis: {
+    [key: string]: {
+      prediction: number;
+      confidence: number;
+      features: {
+        price_volatility: number;
+        volume_change: number;
+        price_momentum: number;
+        avg_sentiment: number;
+        sentiment_volatility: number;
+      };
+    };
+  };
 }
-
 export function useSSE() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
