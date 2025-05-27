@@ -78,6 +78,29 @@ def initialize_analyzer():
             print(f"⚠️ Initial training incomplete (will retry in 5 seconds): {e}")
             time.sleep(5)
 
+@app.route("/")
+def home():
+    """Home route - provides API information"""
+    return jsonify({
+        "message": "🚀 Crypto Analysis API is running!",
+        "status": "active",
+        "endpoints": {
+            "/crypto-data": "Get current crypto prices, news, and analysis",
+            "/crypto-stream": "Real-time streaming crypto data (SSE)",
+        },
+        "supported_coins": coin_ids,
+        "model_status": "ready" if analyzer.is_scaler_fitted else "initializing"
+    })
+
+@app.route("/health")
+def health():
+    """Health check endpoint"""
+    return jsonify({
+        "status": "healthy",
+        "model_ready": analyzer.is_scaler_fitted,
+        "timestamp": int(time.time())
+    })
+
 @app.route("/crypto-data", methods=["GET"])
 def get_crypto_data():
     prices = fetch_price_data()
