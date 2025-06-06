@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+echo "" >> .gitignore
+echo "# Database files" >> .gitignore
+echo "crypto_data.db" >> .gitignore
+echo "*.db" >> .gitignore
+echo "__pycache__/" >> .gitignore
+echo "*.pyc" >> .gitignore
