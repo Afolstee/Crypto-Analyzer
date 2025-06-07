@@ -75,7 +75,6 @@ def fetch_news():
             news_data = data.get("Data", [])
             print(f"✅ Fetched {len(news_data)} news articles successfully")
             
-            # Transform CryptoCompare news format to match our expected format
             transformed_news = []
             for article in news_data:
                 transformed_article = {

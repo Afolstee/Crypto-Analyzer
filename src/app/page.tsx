@@ -3,12 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useSSE } from '@/hooks/useSSE';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { AlertCircle, Loader2, TrendingUp, TrendingDown, Activity, X, HelpCircle } from 'lucide-react';
-import { API_CONFIG } from '@/config/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { motion } from 'framer-motion';
+import { API_CONFIG } from '@/config/api';
 
 interface CryptoPrice {
   id: string;
@@ -47,7 +46,7 @@ interface Analysis {
     avg_sentiment: number;
     sentiment_volatility: number;
   };
-  timestamp?: number; // Added for tracking when prediction was made
+  timestamp?: number;
 }
 
 interface SSEResponse<T> {
@@ -57,7 +56,7 @@ interface SSEResponse<T> {
   isInitialLoading: boolean;
 }
 
-// Custom tooltip component for explanations (renamed to avoid conflict with Recharts Tooltip)
+// Custom tooltip component for explanations
 const CustomTooltip = ({ text, children }: { text: string; children: React.ReactNode }) => {
   const [isVisible, setIsVisible] = useState(false);
   
@@ -80,6 +79,26 @@ const CustomTooltip = ({ text, children }: { text: string; children: React.React
   );
 };
 
+// Safe date formatter to prevent hydration mismatches
+const formatDate = (date: Date | string | number) => {
+  try {
+    const d = new Date(date);
+    return d.toLocaleString();
+  } catch {
+    return 'Invalid Date';
+  }
+};
+
+// Safe time formatter
+const formatTime = (date: Date | string | number) => {
+  try {
+    const d = new Date(date);
+    return d.toLocaleTimeString();
+  } catch {
+    return 'Invalid Time';
+  }
+};
+
 // Prediction Modal Component
 const PredictionModal = ({ 
   isOpen, 
@@ -96,16 +115,20 @@ const PredictionModal = ({
   chartData: ChartData[];
   modelReady: boolean;
 }) => {
-  // Handle click outside modal
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  // Show loading state when model isn't ready or no analysis yet
   if (!modelReady || !analysis) {
     return (
       <div 
@@ -175,7 +198,7 @@ const PredictionModal = ({
                 {coin.id} Price Prediction
               </h2>
               <p className="text-sm text-gray-500 mt-1">
-                (Last updated: {lastUpdated.toLocaleString()})
+                (Last updated: {formatDate(lastUpdated)})
               </p>
             </div>
             <button
@@ -331,7 +354,32 @@ const CryptoPriceCard = ({ coin, chartData, analysis, modelReady }: {
   modelReady: boolean;
 }) => {
   const [showPrediction, setShowPrediction] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const isPositive = coin.price_change_percentage_24h >= 0;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <Card className="overflow-hidden shadow-lg">
+        <CardHeader className="bg-gray-50">
+          <CardTitle className="capitalize flex justify-between items-center">
+            <span>Loading...</span>
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded mb-4"></div>
+            <div className="h-48 bg-gray-200 rounded"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -361,7 +409,6 @@ const CryptoPriceCard = ({ coin, chartData, analysis, modelReady }: {
               </p>
             </div>
             
-            {/* Prediction Button */}
             <div className="mb-4">
               <button
                 onClick={() => setShowPrediction(true)}
@@ -372,7 +419,7 @@ const CryptoPriceCard = ({ coin, chartData, analysis, modelReady }: {
               </button>
             </div>
 
-            {chartData && (
+            {chartData && chartData.length > 0 && (
               <div className="h-48">
                 <LineChart width={300} height={180} data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
@@ -407,7 +454,6 @@ const CryptoPriceCard = ({ coin, chartData, analysis, modelReady }: {
         </Card>
       </motion.div>
 
-      {/* Prediction Modal */}
       <PredictionModal
         isOpen={showPrediction}
         onClose={() => setShowPrediction(false)}
@@ -420,41 +466,66 @@ const CryptoPriceCard = ({ coin, chartData, analysis, modelReady }: {
   );
 };
 
-const NewsCard = ({ item }: { item: NewsItem }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.5 }}
-  >
-    <Card className="shadow-md hover:shadow-lg transition-shadow">
-      <CardContent className="p-6">
-        <h3 className="font-bold mb-2 text-lg">
-          <a 
-            href={item.url} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="text-blue-600 hover:text-blue-800 hover:underline"
-          >
-            {item.title}
-          </a>
-        </h3>
-        <p className="text-sm text-gray-500 mb-3">
-          Published: {new Date(item.published_at).toLocaleString()}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {item.currencies.map(currency => (
-            <span 
-              key={currency.code} 
-              className="bg-gray-100 text-gray-800 rounded-full px-3 py-1 text-sm font-medium"
+const NewsCard = ({ item }: { item: NewsItem }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <Card className="shadow-md">
+        <CardContent className="p-6">
+          <div className="animate-pulse">
+            <div className="h-6 bg-gray-200 rounded mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded mb-3"></div>
+            <div className="flex space-x-2">
+              <div className="h-6 bg-gray-200 rounded-full w-16"></div>
+              <div className="h-6 bg-gray-200 rounded-full w-16"></div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <Card className="shadow-md hover:shadow-lg transition-shadow">
+        <CardContent className="p-6">
+          <h3 className="font-bold mb-2 text-lg">
+            <a 
+              href={item.url} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-blue-600 hover:text-blue-800 hover:underline"
             >
-              {currency.code}
-            </span>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  </motion.div>
-);
+              {item.title}
+            </a>
+          </h3>
+          <p className="text-sm text-gray-500 mb-3">
+            Published: {formatDate(item.published_at)}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {item.currencies.map(currency => (
+              <span 
+                key={currency.code} 
+                className="bg-gray-100 text-gray-800 rounded-full px-3 py-1 text-sm font-medium"
+              >
+                {currency.code}
+              </span>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
 
 export default function Home() {
   const { data, isConnected, error, isInitialLoading } = useSSE() as SSEResponse<StreamData>;
@@ -463,6 +534,11 @@ export default function Home() {
   const [chartData, setChartData] = useState<{ [key: string]: ChartData[] }>({});
   const [lastAnalysis, setLastAnalysis] = useState<{ [key: string]: Analysis }>({});
   const [activeTab, setActiveTab] = useState<string>("prices");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (data) {
@@ -474,7 +550,6 @@ export default function Home() {
         setNews(data.news);
       }
 
-      // Store analysis with timestamps for "last updated" functionality
       if (data.analysis) {
         const timestampedAnalysis: { [key: string]: Analysis } = {};
         Object.keys(data.analysis).forEach(coinId => {
@@ -492,30 +567,34 @@ export default function Home() {
           if (!newChartData[price.id]) {
             newChartData[price.id] = [];
           }
+          // Use a stable timestamp to prevent hydration issues
+          const timestamp = formatTime(new Date());
           newChartData[price.id] = [
             ...newChartData[price.id],
             {
-              name: new Date().toLocaleTimeString(),
+              name: timestamp,
               price: price.current_price
             }
-          ].slice(-30);
+          ].slice(-30); // Keep only last 30 data points
         });
         return newChartData;
       });
     }
   }, [data]);
 
-  if (isInitialLoading) {
+  if (!mounted || isInitialLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Loading crypto dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Sticky Header */}
       <div className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="container mx-auto p-4">
           <motion.h1 
@@ -528,10 +607,7 @@ export default function Home() {
           </motion.h1>
           
           {!isConnected && (
-            <Alert 
-              variant="destructive" 
-              className="mb-4"
-            >
+            <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 Connection lost. Displaying last available data. Attempting to reconnect...
@@ -566,7 +642,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="container mx-auto p-4">
         {activeTab === "prices" && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -591,7 +666,7 @@ export default function Home() {
         {activeTab === "news" && (
           <div className="space-y-4">
             {news.map((item, index) => (
-              <NewsCard key={index} item={item} />
+              <NewsCard key={`${item.url}-${index}`} item={item} />
             ))}
           </div>
         )}
