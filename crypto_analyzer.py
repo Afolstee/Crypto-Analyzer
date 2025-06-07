@@ -9,9 +9,10 @@ import json
 
 
 class CryptoDataManager:
-    def __init__(self, coin_ids, db_path='crypto_data.db'):
+    def __init__(self, coin_ids, db_path=None):
         self.coin_ids = coin_ids
-        self.db_path = db_path
+        # Use environment variable or default to current directory
+        self.db_path = db_path or os.environ.get('DATABASE_PATH', 'crypto_data.db')
         self.setup_database()
         self.scaler = StandardScaler()
         self.model = RandomForestClassifier(n_estimators=100, random_state=42)
